@@ -1,35 +1,63 @@
 import streamlit as st
+import random
 
-st.title("🚀 Tech Quiz Challenge")
-st.subheader("Can you crack these AWS & DevOps questions?")
+st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
 
-questions = [
+st.title("🧠 Who Said It: AI or Human?")
+st.subheader("Guess whether the quote is written by an AI or a human!")
+
+# Sample quotes
+quotes = [
     {
-        "q": "Which AWS service is used for object storage?",
-        "options": ["EC2", "Lambda", "S3", "RDS"],
-        "answer": "S3"
+        "text": "The greatest glory in living lies not in never falling, but in rising every time we fall.",
+        "source": "Human",
+        "by": "Nelson Mandela"
     },
     {
-        "q": "Which tool is best for Infrastructure as Code?",
-        "options": ["Ansible", "Terraform", "Jenkins", "Docker"],
-        "answer": "Terraform"
+        "text": "As an intelligent machine, I aim to replicate human creativity but lack genuine emotion.",
+        "source": "AI",
+        "by": "GPT-3"
     },
     {
-        "q": "Which command initializes a new Git repo?",
-        "options": ["git init", "git start", "git create", "git push"],
-        "answer": "git init"
+        "text": "Sometimes, silence is the loudest scream.",
+        "source": "Human",
+        "by": "Anonymous Poet"
     },
+    {
+        "text": "Dreams are not bound by physical laws or limited by logic; they are the blueprints of possibility.",
+        "source": "AI",
+        "by": "ChatGPT"
+    },
+    {
+        "text": "If I could feel, I imagine curiosity would be my favorite emotion.",
+        "source": "AI",
+        "by": "Claude AI"
+    },
+    {
+        "text": "To be yourself in a world that is constantly trying to make you something else is the greatest accomplishment.",
+        "source": "Human",
+        "by": "Ralph Waldo Emerson"
+    }
 ]
 
-score = 0
-for i, item in enumerate(questions):
-    st.markdown(f"**Q{i+1}: {item['q']}**")
-    answer = st.radio("Choose one:", item['options'], key=f"q{i}")
-    if st.button(f"Submit Q{i+1}", key=f"btn{i}"):
-        if answer == item['answer']:
-            st.success("Correct!")
-            score += 1
-        else:
-            st.error("Oops! That's not right.")
+if "score" not in st.session_state:
+    st.session_state.score = 0
+    st.session_state.total = 0
 
-st.markdown(f"### ✅ Your Score: {score}/{len(questions)}")
+# Pick a random quote
+quote = random.choice(quotes)
+
+st.markdown(f"### 📝 \"{quote['text']}\"")
+choice = st.radio("Who said it?", ["AI", "Human"])
+
+if st.button("Submit Answer"):
+    st.session_state.total += 1
+    if choice == quote["source"]:
+        st.success(f"✅ Correct! It was {quote['source']} - {quote['by']}")
+        st.session_state.score += 1
+    else:
+        st.error(f"❌ Oops! It was actually {quote['source']} - {quote['by']}")
+
+    st.markdown("---")
+    st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
+    st.button("Try Another", on_click=lambda: st.experimental_rerun())
