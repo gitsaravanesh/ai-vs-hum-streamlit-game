@@ -6,7 +6,6 @@ st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
 st.title("🧠 Who Said It: AI or Human?")
 st.subheader("Guess whether the quote is written by an AI or a Human!")
 
-# Sample quotes
 quotes = [
     {
         "text": "The greatest glory in living lies not in never falling, but in rising every time we fall.",
@@ -51,7 +50,7 @@ if "answered" not in st.session_state:
 
 quote = st.session_state.current_quote
 st.markdown(f"### 📝 \"{quote['text']}\"")
-choice = st.radio("Who said it?", ["AI", "Human"])
+choice = st.radio("Who said it?", ["AI", "Human"], key="answer")
 
 if st.button("Submit Answer") and not st.session_state.answered:
     st.session_state.total += 1
@@ -68,4 +67,4 @@ if st.session_state.answered:
     if st.button("Try Another"):
         st.session_state.current_quote = random.choice(quotes)
         st.session_state.answered = False
-        st.experimental_rerun()
+        st.rerun()
