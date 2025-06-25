@@ -6,6 +6,7 @@ st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
 st.title("🧠 Who Said It: AI or Human?")
 st.subheader("Guess whether the quote is written by an AI or a Human!")
 
+# Sample quotes
 quotes = [
     {
         "text": "The greatest glory in living lies not in never falling, but in rising every time we fall.",
@@ -39,32 +40,53 @@ quotes = [
     }
 ]
 
-# Initialize session state
+# Initialize state
 if "score" not in st.session_state:
     st.session_state.score = 0
     st.session_state.total = 0
-if "current_quote" not in st.session_state:
-    st.session_state.current_quote = random.choice(quotes)
+if "used_indexes" not in st.session_state:
+    st.session_state.used_indexes = []
+if "current_index" not in st.session_state:
+    st.session_state.current_index = random.randint(0, len(quotes) - 1)
 if "answered" not in st.session_state:
     st.session_state.answered = False
+if "quiz_finished" not in st.session_state:
+    st.session_state.quiz_finished = False
 
-quote = st.session_state.current_quote
-st.markdown(f"### 📝 \"{quote['text']}\"")
-choice = st.radio("Who said it?", ["AI", "Human"], key="answer")
+# End game if all quotes are used
+if len(st.session_state.used_indexes) == len(quotes):
+    st.session_state.quiz_finished = True
 
-if st.button("Submit Answer") and not st.session_state.answered:
-    st.session_state.total += 1
-    st.session_state.answered = True
-    if choice == quote["source"]:
-        st.success(f"✅ Correct! It was {quote['source']} - {quote['by']}")
-        st.session_state.score += 1
-    else:
-        st.error(f"❌ Oops! It was actually {quote['source']} - {quote['by']}")
-
-    st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
-
-if st.session_state.answered:
-    if st.button("Try Another"):
-        st.session_state.current_quote = random.choice(quotes)
+if st.session_state.quiz_finished:
+    st.success(f"🎉 Quiz Complete! Your Final Score: {st.session_state.score}/{st.session_state.total}")
+    if st.button("🔄 Restart Quiz"):
+        st.session_state.score = 0
+        st.session_state.total = 0
+        st.session_state.used_indexes = []
         st.session_state.answered = False
+        st.session_state.quiz_finished = False
         st.rerun()
+else:
+    # Show current quote
+    current_quote = quotes[st.session_state.current_index]
+    st.markdown(f"### 📝 \"{current_quote['text']}\"")
+    choice = st.radio("Who said it?", ["AI", "Human"], key="choice")
+
+    if st.button("Submit Answer") and not st.session_state.answered:
+        st.session_state.total += 1
+        st.session_state.answered = True
+        st.session_state.used_indexes.append(st.session_state.current_index)
+        if choice == current_quote["source"]:
+            st.success(f"✅ Correct! It was {current_quote['source']} - {current_quote['by']}")
+            st.session_state.score += 1
+        else:
+            st.error(f"❌ Oops! It was actually {current_quote['source']} - {current_quote['by']}")
+        st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
+
+    if st.session_state.answered:
+        if st.button("Next Quote"):
+            available_indexes = list(set(range(len(quotes))) - set(st.session_state.used_indexes))
+            if available_indexes:
+                st.session_state.current_index = random.choice(available_indexes)
+                st.session_state.answered = False
+                st.rerun()
