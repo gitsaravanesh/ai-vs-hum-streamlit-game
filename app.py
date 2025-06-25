@@ -4,7 +4,7 @@ import random
 st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
 
 st.title("🧠 Who Said It: AI or Human?")
-st.subheader("Guess whether the quote is written by an AI or a human!")
+st.subheader("Guess whether the quote is written by an AI or a Human!")
 
 # Sample quotes
 quotes = [
@@ -40,24 +40,32 @@ quotes = [
     }
 ]
 
+# Initialize session state
 if "score" not in st.session_state:
     st.session_state.score = 0
     st.session_state.total = 0
+if "current_quote" not in st.session_state:
+    st.session_state.current_quote = random.choice(quotes)
+if "answered" not in st.session_state:
+    st.session_state.answered = False
 
-# Pick a random quote
-quote = random.choice(quotes)
-
+quote = st.session_state.current_quote
 st.markdown(f"### 📝 \"{quote['text']}\"")
 choice = st.radio("Who said it?", ["AI", "Human"])
 
-if st.button("Submit Answer"):
+if st.button("Submit Answer") and not st.session_state.answered:
     st.session_state.total += 1
+    st.session_state.answered = True
     if choice == quote["source"]:
         st.success(f"✅ Correct! It was {quote['source']} - {quote['by']}")
         st.session_state.score += 1
     else:
         st.error(f"❌ Oops! It was actually {quote['source']} - {quote['by']}")
 
-    st.markdown("---")
     st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
-    st.button("Try Another", on_click=lambda: st.experimental_rerun())
+
+if st.session_state.answered:
+    if st.button("Try Another"):
+        st.session_state.current_quote = random.choice(quotes)
+        st.session_state.answered = False
+        st.experimental_rerun()
