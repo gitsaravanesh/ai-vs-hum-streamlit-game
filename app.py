@@ -1,92 +1,92 @@
 import streamlit as st
-import random
+import boto3
+import json
+import os
 
+# Set page config
 st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
 
 st.title("🧠 Who Said It: AI or Human?")
-st.subheader("Guess whether the quote is written by an AI or a Human!")
+st.subheader("Pick your style and guess whether the quote is written by AI or a Human!")
 
-# Sample quotes
-quotes = [
-    {
-        "text": "The greatest glory in living lies not in never falling, but in rising every time we fall.",
-        "source": "Human",
-        "by": "Nelson Mandela"
-    },
-    {
-        "text": "As an intelligent machine, I aim to replicate human creativity but lack genuine emotion.",
-        "source": "AI",
-        "by": "GPT-3"
-    },
-    {
-        "text": "Sometimes, silence is the loudest scream.",
-        "source": "Human",
-        "by": "Anonymous Poet"
-    },
-    {
-        "text": "Dreams are not bound by physical laws or limited by logic; they are the blueprints of possibility.",
-        "source": "AI",
-        "by": "ChatGPT"
-    },
-    {
-        "text": "If I could feel, I imagine curiosity would be my favorite emotion.",
-        "source": "AI",
-        "by": "Claude AI"
-    },
-    {
-        "text": "To be yourself in a world that is constantly trying to make you something else is the greatest accomplishment.",
-        "source": "Human",
-        "by": "Ralph Waldo Emerson"
+# Dropdowns to personalize quote
+age_group = st.selectbox("Select your age group", ["Under 18", "18-25", "26-40", "41-60", "60+"])
+preference = st.selectbox("Pick your quote preference", ["Technology", "Motivational", "Humor", "Philosophy", "Life Advice"])
+
+# Initialize Bedrock client using Streamlit secrets or env vars
+bedrock = boto3.client(
+    service_name="bedrock-runtime",
+    region_name=os.getenv("AWS_REGION", "us-east-1"),
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", st.secrets.get("AWS_ACCESS_KEY_ID")),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", st.secrets.get("AWS_SECRET_ACCESS_KEY"))
+)
+
+# Function to get quote from Llama 3
+def get_custom_quote(age_group, preference):
+    prompt = f"Generate one quote for a user aged {age_group} who prefers {preference}. Respond strictly in JSON like this:\n{{\n  \"quote\": \"The quote text\",\n  \"source\": \"AI\" or \"Human\"\n}}"
+
+    body = {
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an assistant that only generates short quotes for a guessing game called 'Who Said It: AI or Human?'."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "max_tokens": 300,
+        "temperature": 0.9,
+        "top_p": 0.9
     }
-]
 
-# Initialize state
+    response = bedrock.invoke_model(
+        modelId="meta.llama3-8b-instruct-v1:0",
+        contentType="application/json",
+        accept="application/json",
+        body=json.dumps(body)
+    )
+
+    response_body = json.loads(response['body'].read())
+    try:
+        # Parse only the model's reply
+        result = json.loads(response_body["generation"])
+        return result["quote"], result["source"]
+    except Exception as e:
+        print("Error parsing:", e)
+        return "Unable to get a valid quote. Try again!", "AI"
+
+# Session state init
 if "score" not in st.session_state:
     st.session_state.score = 0
     st.session_state.total = 0
-if "used_indexes" not in st.session_state:
-    st.session_state.used_indexes = []
-if "current_index" not in st.session_state:
-    st.session_state.current_index = random.randint(0, len(quotes) - 1)
-if "answered" not in st.session_state:
+if "quote" not in st.session_state:
+    quote, source = get_custom_quote(age_group, preference)
+    st.session_state.quote = quote
+    st.session_state.source = source
     st.session_state.answered = False
-if "quiz_finished" not in st.session_state:
-    st.session_state.quiz_finished = False
 
-# End game if all quotes are used
-if len(st.session_state.used_indexes) == len(quotes):
-    st.session_state.quiz_finished = True
+# Show quote
+st.markdown(f"### 📝 \"{st.session_state.quote}\"")
+choice = st.radio("Who said it?", ["AI", "Human"], key="guess")
 
-if st.session_state.quiz_finished:
-    st.success(f"🎉 Quiz Complete! Your Final Score: {st.session_state.score}/{st.session_state.total}")
-    if st.button("🔄 Restart Quiz"):
-        st.session_state.score = 0
-        st.session_state.total = 0
-        st.session_state.used_indexes = []
+# Handle answer
+if st.button("Submit Answer") and not st.session_state.answered:
+    st.session_state.total += 1
+    st.session_state.answered = True
+    if choice == st.session_state.source:
+        st.success("✅ Correct!")
+        st.session_state.score += 1
+    else:
+        st.error(f"❌ Nope! It was actually {st.session_state.source}")
+    st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
+
+# Load next quote
+if st.session_state.answered:
+    if st.button("Next Quote"):
+        quote, source = get_custom_quote(age_group, preference)
+        st.session_state.quote = quote
+        st.session_state.source = source
         st.session_state.answered = False
-        st.session_state.quiz_finished = False
         st.rerun()
-else:
-    # Show current quote
-    current_quote = quotes[st.session_state.current_index]
-    st.markdown(f"### 📝 \"{current_quote['text']}\"")
-    choice = st.radio("Who said it?", ["AI", "Human"], key="choice")
-
-    if st.button("Submit Answer") and not st.session_state.answered:
-        st.session_state.total += 1
-        st.session_state.answered = True
-        st.session_state.used_indexes.append(st.session_state.current_index)
-        if choice == current_quote["source"]:
-            st.success(f"✅ Correct! It was {current_quote['source']} - {current_quote['by']}")
-            st.session_state.score += 1
-        else:
-            st.error(f"❌ Oops! It was actually {current_quote['source']} - {current_quote['by']}")
-        st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
-
-    if st.session_state.answered:
-        if st.button("Next Quote"):
-            available_indexes = list(set(range(len(quotes))) - set(st.session_state.used_indexes))
-            if available_indexes:
-                st.session_state.current_index = random.choice(available_indexes)
-                st.session_state.answered = False
-                st.rerun()
