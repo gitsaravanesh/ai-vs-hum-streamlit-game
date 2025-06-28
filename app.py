@@ -108,10 +108,10 @@ if st.session_state.load_new_quote:
 # Display quote and user input
 # -------------------------------
 st.markdown(f"### 📝 \"{st.session_state.quote}\"")
-choice = st.radio("Who said it?", ["AI", "Human"], key="guess")
+choice = st.radio("Who said it?", ["AI", "Human"], key=f"guess_{st.session_state.total}")
 
 # -------------------------------
-# Evaluate guess
+# Submit answer
 # -------------------------------
 if st.button("Submit Answer") and not st.session_state.answered:
     st.session_state.total += 1
@@ -124,7 +124,7 @@ if st.button("Submit Answer") and not st.session_state.answered:
     st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
 
 # -------------------------------
-# Next quote button
+# Always show "Next Quote" after answering
 # -------------------------------
 if st.session_state.answered:
     if st.button("Next Quote"):
