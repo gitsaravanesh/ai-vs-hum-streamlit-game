@@ -1,6 +1,7 @@
 import streamlit as st
 import boto3
 import json
+import re
 
 # -------------------------------
 # Page configuration
@@ -27,7 +28,20 @@ bedrock = boto3.client(
 )
 
 # -------------------------------
-# Function to fetch quote from Llama 3 (correct prompt structure)
+# Utility: Extract JSON from messy output
+# -------------------------------
+def extract_json_from_text(text):
+    try:
+        json_str = re.search(r"\{.*?\}", text, re.DOTALL).group(0)
+        return json.loads(json_str)
+    except Exception as e:
+        st.error("⚠️ Could not extract valid JSON from model output.")
+        st.write("🧨 JSON parsing error:", str(e))
+        st.write("📝 Full model response:", text)
+        return {"quote": "The mind dreams. The machine delivers.", "source": "AI"}
+
+# -------------------------------
+# Function to fetch quote from Llama 3
 # -------------------------------
 def get_custom_quote(age_group, preference):
     prompt = (
@@ -55,13 +69,10 @@ def get_custom_quote(age_group, preference):
         response_body = json.loads(response['body'].read())
         generation = response_body.get("generation")
 
-        # Optional: log the raw output
-        # st.write("Raw LLM output:", generation)
-
         if not generation:
             raise ValueError("Missing 'generation' key in response")
 
-        parsed = json.loads(generation)
+        parsed = extract_json_from_text(generation)
         return parsed["quote"], parsed["source"]
 
     except Exception as e:
