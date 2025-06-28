@@ -48,29 +48,25 @@ bedrock = boto3.client(
 # -------------------------------
 def extract_quotes_array(text):
     try:
-        json_array = re.search(r"\s*\{.*?\}\s*", text, re.DOTALL).group(0)
-        return json.loads(json_array)
+        match = re.search(r"\s*\{.*?\}\s*", text, re.DOTALL)
+        if not match:
+            return []
+        return json.loads(match.group(0))
     except Exception:
         return []
 
 # -------------------------------
-# Load 10 quotes using one Bedrock call
+# Load quotes using one Bedrock call
 # -------------------------------
-def load_quotes_batch(age_group, preference):
+def load_quotes_batch(age_group, preference, max_attempts=3):
     prompt = (
-        "You are an assistant that generates short, thought-provoking quotes for a guessing game.\n\n"
-        "Please generate a list of 10 quotes. Each quote should be either:\n"
+        "You are an assistant that generates thought-provoking quotes. Each quote should be either:\n"
         "- an original AI-generated quote\n"
-        "- or a famous quote by a known human\n\n"
-        "Each item must be in JSON format like:\n"
-        '{"quote": "text here", "source": "AI" or "Human"}\n\n'
-        "Respond ONLY with a JSON array like:\n"
-        "[\n"
-        '  {"quote": "...", "source": "..."},\n'
-        "  ...\n"
-        "]\n\n"
-        f"Topic: {preference}\n"
-        f"Age group: {age_group}"
+        "- or a real quote by a human\n\n"
+        "Return only a JSON array like:\n"
+        '[{"quote": "text", "source": "AI" or "Human"}, ...]\n\n'
+        f"Audience: {age_group}\n"
+        f"Topic: {preference}"
     )
 
     body = {
@@ -80,39 +76,39 @@ def load_quotes_batch(age_group, preference):
         "top_p": 0.9
     }
 
-    try:
-        response = bedrock.invoke_model(
-            modelId="meta.llama3-8b-instruct-v1:0",
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(body)
-        )
-        response_body = json.loads(response['body'].read())
-        generation = response_body.get("generation", "")
-        quotes = extract_quotes_array(generation)
+    for attempt in range(max_attempts):
+        try:
+            response = bedrock.invoke_model(
+                modelId="meta.llama3-8b-instruct-v1:0",
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(body)
+            )
+            response_body = json.loads(response['body'].read())
+            generation = response_body.get("generation", "")
+            quotes = extract_quotes_array(generation)
 
-        # Validate and clean
-        valid_quotes = [
-            q for q in quotes
-            if isinstance(q, dict)
-            and "quote" in q
-            and "source" in q
-            and q["quote"].strip() != ""
-            and q["source"] in ["AI", "Human"]
-        ]
-        return valid_quotes[:10]
+            valid_quotes = [
+                q for q in quotes
+                if isinstance(q, dict)
+                and "quote" in q
+                and "source" in q
+                and q["quote"].strip() != ""
+                and q["source"] in ["AI", "Human"]
+            ]
+            if len(valid_quotes) >= 3:  # minimum valid threshold
+                return valid_quotes[:10]
+        except Exception:
+            continue
 
-    except Exception as e:
-        st.error("❌ Failed to generate quotes from the model.")
-        st.caption(f"Debug info: {e}")
-        return []
+    return []
 
 # -------------------------------
 # Start the game
 # -------------------------------
 if not st.session_state.game_started:
     if st.button("Start Game"):
-        with st.spinner("🎲 Generating 10 mysterious quotes..."):
+        with st.spinner("Getting your first quote..."):
             st.session_state.quotes = load_quotes_batch(age_group, preference)
             st.session_state.current_index = 0
             st.session_state.total = 0
@@ -124,12 +120,13 @@ if not st.session_state.game_started:
             st.warning("⚠️ No quotes loaded. Try again.")
             st.session_state.game_started = False
         else:
-            st.session_state.current_quote = st.session_state.quotes[0]["quote"]
-            st.session_state.current_source = st.session_state.quotes[0]["source"]
+            first = st.session_state.quotes[0]
+            st.session_state.current_quote = first["quote"]
+            st.session_state.current_source = first["source"]
     st.stop()
 
 # -------------------------------
-# Show current quote
+# Display current quote
 # -------------------------------
 st.markdown(f"### 📝 \"{st.session_state.current_quote}\"")
 
@@ -158,14 +155,14 @@ if st.session_state.answered:
     if st.session_state.current_index < len(st.session_state.quotes) - 1:
         if st.button("Next Quote"):
             st.session_state.current_index += 1
-            next_quote = st.session_state.quotes[st.session_state.current_index]
-            st.session_state.current_quote = next_quote["quote"]
-            st.session_state.current_source = next_quote["source"]
+            next_q = st.session_state.quotes[st.session_state.current_index]
+            st.session_state.current_quote = next_q["quote"]
+            st.session_state.current_source = next_q["source"]
             st.session_state.answered = False
             st.rerun()
     else:
         st.markdown("---")
-        st.success("🎉 You've reached the end of the game!")
+        st.success("🎉 You've reached the end!")
         st.markdown(f"### 🏁 Final Score: {st.session_state.score}/{st.session_state.total}")
         if st.button("🔄 Play Again"):
             for key in defaults:
