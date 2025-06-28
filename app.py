@@ -23,6 +23,8 @@ if "quote" not in st.session_state:
     st.session_state.quote = ""
 if "source" not in st.session_state:
     st.session_state.source = ""
+if "author" not in st.session_state:
+    st.session_state.author = ""
 if "answered" not in st.session_state:
     st.session_state.answered = False
 if "load_new_quote" not in st.session_state:
@@ -74,20 +76,19 @@ def extract_json_from_text(text):
             return parsed
     except Exception:
         pass
-    return {"quote": "", "source": ""}
+    return {"quote": "", "source": "", "author": ""}
 
 # -------------------------------
-# Get quote from Bedrock with uniqueness and retry
+# Get quote from Bedrock
 # -------------------------------
 def get_custom_quote(age_group, preference, max_retries=5):
     prompt = (
-        f"You are playing a game. You must output a quote and label whether it was written by an AI or a Human.\n"
-        f"Randomly choose:\n"
-        f" - If AI: invent a short quote yourself.\n"
-        f" - If Human: select a real quote said by a real human.\n\n"
-        f"Respond ONLY in this JSON format:\n"
-        f'{{\n  "quote": "text here",\n  "source": "AI" or "Human"\n}}\n\n'
-        f"Do not include anything else in the response.\n\n"
+        f"You are playing a guessing game. Randomly choose:\n"
+        f"- If AI: invent a short quote yourself.\n"
+        f'- If Human: use a real quote said by a real person and return the author\'s name.\n\n'
+        f"Respond strictly in this JSON format:\n"
+        f'{{\n  "quote": "text here",\n  "source": "AI" or "Human",\n  "author": "name or None"\n}}\n\n'
+        f"Do not include anything else in your response.\n\n"
         f"Topic: {preference}\nAudience Age Group: {age_group}"
     )
 
@@ -112,6 +113,7 @@ def get_custom_quote(age_group, preference, max_retries=5):
 
             quote = parsed.get("quote", "").strip()
             source = parsed.get("source", "")
+            author = parsed.get("author", "").strip()
 
             if (
                 quote and
@@ -121,20 +123,22 @@ def get_custom_quote(age_group, preference, max_retries=5):
                 st.session_state.recent_quotes.append(quote)
                 if len(st.session_state.recent_quotes) > 10:
                     st.session_state.recent_quotes.pop(0)
-                return quote, source
+                return quote, source, author
         except Exception:
             continue
 
-    return "When circuits dream, wisdom awakens.", "AI"
+    # fallback
+    return "When circuits dream, wisdom awakens.", "AI", "None"
 
 # -------------------------------
-# Load quote
+# Load new quote
 # -------------------------------
 if st.session_state.load_new_quote:
     with st.spinner("💡 Generating a mysterious quote..."):
-        quote, source = get_custom_quote(age_group, preference)
+        quote, source, author = get_custom_quote(age_group, preference)
         st.session_state.quote = quote
         st.session_state.source = source
+        st.session_state.author = author
         st.session_state.load_new_quote = False
         st.session_state.answered = False
 
@@ -163,6 +167,10 @@ if st.button("Submit Answer") and not st.session_state.answered:
         st.session_state.score += 1
     else:
         st.error(f"❌ Nope! It was actually {st.session_state.source}")
+
+    if st.session_state.source == "Human" and st.session_state.author and st.session_state.author.lower() != "none":
+        st.info(f"👤 Quote by: **{st.session_state.author}**")
+
     st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
 
 # -------------------------------
