@@ -28,8 +28,8 @@ if "answered" not in st.session_state:
     st.session_state.answered = False
 if "load_new_quote" not in st.session_state:
     st.session_state.load_new_quote = False
-if "previous_quote" not in st.session_state:
-    st.session_state.previous_quote = ""
+if "recent_quotes" not in st.session_state:
+    st.session_state.recent_quotes = []
 
 # -------------------------------
 # User input for personalization
@@ -104,12 +104,20 @@ def get_custom_quote(age_group, preference, max_retries=5):
             quote = parsed.get("quote", "").strip()
             source = parsed.get("source", "")
 
-            if quote and source in ["AI", "Human"] and quote != st.session_state.previous_quote:
-                st.session_state.previous_quote = quote
+            if (
+                quote and
+                source in ["AI", "Human"] and
+                quote not in st.session_state.recent_quotes
+            ):
+                # Update quote history
+                st.session_state.recent_quotes.append(quote)
+                if len(st.session_state.recent_quotes) > 10:
+                    st.session_state.recent_quotes.pop(0)
                 return quote, source
         except Exception:
             continue
 
+    # Fallback
     return "When circuits dream, wisdom awakens.", "AI"
 
 # -------------------------------
