@@ -60,17 +60,18 @@ bedrock = boto3.client(
 def extract_json_from_text(text):
     try:
         json_str = re.search(r"\{.*?\}", text, re.DOTALL).group(0)
-        return json.loads(json_str)
-    except Exception as e:
-        st.error("⚠️ Could not extract valid JSON from model output.")
-        st.write("🧨 JSON parsing error:", str(e))
-        st.write("📝 Full model response:", text)
-        return {"quote": "Fallback quote due to parsing error.", "source": "AI"}
+        parsed = json.loads(json_str)
+        if "quote" in parsed and "source" in parsed:
+            return parsed
+        else:
+            raise ValueError("JSON missing required keys.")
+    except Exception:
+        return {"quote": "", "source": ""}
 
 # -------------------------------
-# Function to get quote from Llama 3
+# Function to get quote from Llama 3 with retries
 # -------------------------------
-def get_custom_quote(age_group, preference):
+def get_custom_quote(age_group, preference, max_retries=3):
     prompt = (
         f"You are an assistant that generates short quotes for a guessing game. "
         f"Randomly choose to either write your own quote as an AI, "
@@ -87,27 +88,26 @@ def get_custom_quote(age_group, preference):
         "top_p": 0.9
     }
 
-    try:
-        response = bedrock.invoke_model(
-            modelId="meta.llama3-8b-instruct-v1:0",
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(body)
-        )
+    for _ in range(max_retries):
+        try:
+            response = bedrock.invoke_model(
+                modelId="meta.llama3-8b-instruct-v1:0",
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(body)
+            )
+            response_body = json.loads(response['body'].read())
+            generation = response_body.get("generation", "")
+            parsed = extract_json_from_text(generation)
 
-        response_body = json.loads(response['body'].read())
-        generation = response_body.get("generation")
+            if parsed["quote"].strip() and parsed["source"] in ["AI", "Human"]:
+                return parsed["quote"], parsed["source"]
 
-        if not generation:
-            raise ValueError("Missing 'generation' key in response")
+        except Exception:
+            continue
 
-        parsed = extract_json_from_text(generation)
-        return parsed["quote"], parsed["source"]
-
-    except Exception as e:
-        st.error("⚠️ Failed to get or parse quote from LLM.")
-        st.write("🧨 Exception:", str(e))
-        return "The future belongs to the curious.", "AI"
+    # Fallback after all retries fail
+    return "The future belongs to those who reboot wisely.", "AI"
 
 # -------------------------------
 # Load a new quote if flagged
