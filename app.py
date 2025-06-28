@@ -7,7 +7,6 @@ import re
 # Page configuration
 # -------------------------------
 st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
-
 st.title("🧠 Who Said It: AI or Human?")
 st.subheader("Pick your style and guess whether the quote is written by AI or a Human!")
 
@@ -38,7 +37,15 @@ age_group = st.selectbox("Select your age group", ["Under 18", "18-25", "26-40",
 preference = st.selectbox("Pick your quote preference", ["Technology", "Motivational", "Humor", "Philosophy", "Life Advice"])
 
 # -------------------------------
-# Start game button
+# Stop after 10 questions
+# -------------------------------
+if st.session_state.total >= 10:
+    st.markdown("## 🎉 Thanks for participating!")
+    st.markdown(f"### Your Final Score: **{st.session_state.score}/10**")
+    st.stop()
+
+# -------------------------------
+# Start game
 # -------------------------------
 if not st.session_state.game_started:
     if st.button("Start Game"):
@@ -70,23 +77,25 @@ def extract_json_from_text(text):
     return {"quote": "", "source": ""}
 
 # -------------------------------
-# Get quote from Bedrock with retries and uniqueness check
+# Get quote from Bedrock with uniqueness and retry
 # -------------------------------
 def get_custom_quote(age_group, preference, max_retries=5):
     prompt = (
-        f"You are an assistant that generates short quotes for a guessing game. "
-        f"Randomly choose to either write your own quote as an AI, "
-        f"or select a real quote from a known human. Do not say who wrote it. "
-        f"Respond strictly in this JSON format:\n"
-        f'{{\n  "quote": "The quote text",\n  "source": "AI" or "Human"\n}}\n\n'
-        f"Topic: {preference}\nAge group: {age_group}"
+        f"You are playing a game. You must output a quote and label whether it was written by an AI or a Human.\n"
+        f"Randomly choose:\n"
+        f" - If AI: invent a short quote yourself.\n"
+        f" - If Human: select a real quote said by a real human.\n\n"
+        f"Respond ONLY in this JSON format:\n"
+        f'{{\n  "quote": "text here",\n  "source": "AI" or "Human"\n}}\n\n'
+        f"Do not include anything else in the response.\n\n"
+        f"Topic: {preference}\nAudience Age Group: {age_group}"
     )
 
     body = {
         "prompt": prompt,
         "max_gen_len": 300,
-        "temperature": 0.9,
-        "top_p": 0.9
+        "temperature": 1.0,
+        "top_p": 1.0
     }
 
     for _ in range(max_retries):
@@ -109,7 +118,6 @@ def get_custom_quote(age_group, preference, max_retries=5):
                 source in ["AI", "Human"] and
                 quote not in st.session_state.recent_quotes
             ):
-                # Update quote history
                 st.session_state.recent_quotes.append(quote)
                 if len(st.session_state.recent_quotes) > 10:
                     st.session_state.recent_quotes.pop(0)
@@ -117,11 +125,10 @@ def get_custom_quote(age_group, preference, max_retries=5):
         except Exception:
             continue
 
-    # Fallback
     return "When circuits dream, wisdom awakens.", "AI"
 
 # -------------------------------
-# Load a new quote if needed
+# Load quote
 # -------------------------------
 if st.session_state.load_new_quote:
     with st.spinner("💡 Generating a mysterious quote..."):
