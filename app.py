@@ -27,16 +27,20 @@ bedrock = boto3.client(
 )
 
 # -------------------------------
-# Function to fetch quote from Bedrock using Llama 3
+# Function to fetch quote from Llama 3 with DEBUGGING
 # -------------------------------
 def get_custom_quote(age_group, preference):
-    prompt = f"Generate one quote for a user aged {age_group} who prefers {preference}. Respond strictly in JSON like this:\n{{\n  \"quote\": \"The quote text\",\n  \"source\": \"AI\" or \"Human\"\n}}"
+    prompt = (
+        f"Generate one quote for a user aged {age_group} who prefers {preference}. "
+        "Respond strictly in JSON like this:\n"
+        "{\n  \"quote\": \"The quote text\",\n  \"source\": \"AI\" or \"Human\"\n}"
+    )
 
     body = {
         "messages": [
             {
                 "role": "system",
-                "content": "You are an assistant that only generates short quotes for a guessing game called 'Who Said It: AI or Human?'."
+                "content": "You are an assistant that only generates short quotes for a guessing game. Your response must follow JSON structure only."
             },
             {
                 "role": "user",
@@ -44,26 +48,34 @@ def get_custom_quote(age_group, preference):
             }
         ],
         "max_tokens": 300,
-        "temperature": 0.9,
-        "top_p": 0.9
+        "temperature": 0.9
     }
 
-    response = bedrock.invoke_model(
-        modelId="meta.llama3-8b-instruct-v1:0",
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps(body)
-    )
-
-    response_body = json.loads(response['body'].read())
-
     try:
-        data = json.loads(response_body["generation"])
-        return data["quote"], data["source"]
+        # DEBUG: Show the payload sent to Bedrock
+        st.write("🛠️ JSON sent to Bedrock:", body)
+
+        response = bedrock.invoke_model(
+            modelId="meta.llama3-8b-instruct-v1:0",
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body)
+        )
+
+        response_body = json.loads(response['body'].read())
+        st.write("📩 Raw Bedrock response body:", response_body)
+
+        generation = response_body.get("generation")
+        if not generation:
+            raise ValueError("Missing 'generation' key in response")
+
+        parsed = json.loads(generation)
+        return parsed["quote"], parsed["source"]
+
     except Exception as e:
-        st.error("⚠️ LLM response format issue. Showing fallback quote.")
-        print("Error parsing model output:", e)
-        return "Technology shapes the mind, but humanity shapes the purpose.", "AI"
+        st.error("⚠️ Failed to get or parse quote from LLM.")
+        st.write("🧨 Exception:", str(e))
+        return "Fallback: Curiosity fuels progress.", "AI"
 
 # -------------------------------
 # Streamlit session state setup
