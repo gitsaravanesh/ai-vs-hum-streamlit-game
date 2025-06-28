@@ -1,160 +1,159 @@
-import streamlit as st 
-import boto3 
-import json 
+import streamlit as st
+import boto3
+import json
 import re
 
--------------------------------
+# -------------------------------
+# Page configuration
+# -------------------------------
+st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
 
-Page config
+st.title("🧠 Who Said It: AI or Human?")
+st.subheader("Pick your style and guess whether the quote is written by AI or a Human!")
 
--------------------------------
+# -------------------------------
+# Initialize session state
+# -------------------------------
+if "game_started" not in st.session_state:
+    st.session_state.game_started = False
+if "score" not in st.session_state:
+    st.session_state.score = 0
+if "total" not in st.session_state:
+    st.session_state.total = 0
+if "quote" not in st.session_state:
+    st.session_state.quote = ""
+if "source" not in st.session_state:
+    st.session_state.source = ""
+if "answered" not in st.session_state:
+    st.session_state.answered = False
+if "load_new_quote" not in st.session_state:
+    st.session_state.load_new_quote = False
+if "previous_quote" not in st.session_state:
+    st.session_state.previous_quote = ""
 
-st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠") st.title("🧠 Who Said It: AI or Human?") st.subheader("Pick your style and guess whether the quote is written by AI or a Human!")
+# -------------------------------
+# User input for personalization
+# -------------------------------
+age_group = st.selectbox("Select your age group", ["Under 18", "18-25", "26-40", "41-60", "60+"])
+preference = st.selectbox("Pick your quote preference", ["Technology", "Motivational", "Humor", "Philosophy", "Life Advice"])
 
--------------------------------
+# -------------------------------
+# Start game button
+# -------------------------------
+if not st.session_state.game_started:
+    if st.button("Start Game"):
+        st.session_state.game_started = True
+        st.session_state.load_new_quote = True
+    st.stop()
 
-Session state setup
+# -------------------------------
+# Bedrock client (from secrets)
+# -------------------------------
+bedrock = boto3.client(
+    service_name="bedrock-runtime",
+    region_name=st.secrets["AWS_REGION"],
+    aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
+    aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"]
+)
 
--------------------------------
-
-defaults = { "game_started": False, "score": 0, "total": 0, "quotes": [], "current_index": 0, "answered": False, "current_quote": "", "current_source": "" }
-
-for key, val in defaults.items(): if key not in st.session_state: st.session_state[key] = val
-
--------------------------------
-
-User inputs
-
--------------------------------
-
-age_group = st.selectbox("Select your age group", ["Under 18", "18-25", "26-40", "41-60", "60+"]) preference = st.selectbox("Pick your quote preference", ["Technology", "Motivational", "Humor", "Philosophy", "Life Advice"])
-
--------------------------------
-
-Bedrock client
-
--------------------------------
-
-bedrock = boto3.client( service_name="bedrock-runtime", region_name=st.secrets["AWS_REGION"], aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"], aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"] )
-
--------------------------------
-
-Extract array of quote JSONs from response
-
--------------------------------
-
-def extract_quotes_array(text): try: match = re.search(r"", text, re.DOTALL) if not match: return [] return json.loads(match.group(0)) except Exception: return []
-
--------------------------------
-
-Load quotes using one Bedrock call
-
--------------------------------
-
-def load_quotes_batch(age_group, preference, max_attempts=3): prompt = f""" You are an assistant that generates short, thought-provoking quotes for a guessing game.
-
-Please generate a JSON array of 10 unique quotes. Each quote should be either:
-
-an original quote created by you, the AI
-
-OR a real, famous quote written by a human
-
-
-Each item in the array should follow this format exactly: {{ "quote": "The actual quote goes here.", "source": "AI" or "Human" }}
-
-Important rules:
-
-Do NOT include any explanation or extra text.
-
-Only output a single JSON array.
-
-Avoid repeating quotes.
-
-Keep each quote under 25 words.
-
-
-Audience age group: {age_group} Topic of interest: {preference} """
-
-body = {
-    "prompt": prompt,
-    "max_gen_len": 2000,
-    "temperature": 0.9,
-    "top_p": 0.9
-}
-
-for attempt in range(max_attempts):
+# -------------------------------
+# Extract JSON from LLM output
+# -------------------------------
+def extract_json_from_text(text):
     try:
-        response = bedrock.invoke_model(
-            modelId="meta.llama3-8b-instruct-v1:0",
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(body)
-        )
-        response_body = json.loads(response['body'].read())
-        generation = response_body.get("generation", "")
-        quotes = extract_quotes_array(generation)
-
-        valid_quotes = [
-            q for q in quotes
-            if isinstance(q, dict)
-            and "quote" in q
-            and "source" in q
-            and q["quote"].strip() != ""
-            and q["source"] in ["AI", "Human"]
-        ]
-        if len(valid_quotes) >= 3:
-            return valid_quotes[:10]
+        json_str = re.search(r"\{.*?\}", text, re.DOTALL).group(0)
+        parsed = json.loads(json_str)
+        if "quote" in parsed and "source" in parsed:
+            return parsed
     except Exception:
-        continue
+        pass
+    return {"quote": "", "source": ""}
 
-return []
+# -------------------------------
+# Get quote from Bedrock with retries and uniqueness check
+# -------------------------------
+def get_custom_quote(age_group, preference, max_retries=5):
+    prompt = (
+        f"You are an assistant that generates short quotes for a guessing game. "
+        f"Randomly choose to either write your own quote as an AI, "
+        f"or select a real quote from a known human. Do not say who wrote it. "
+        f"Respond strictly in this JSON format:\n"
+        f'{{\n  "quote": "The quote text",\n  "source": "AI" or "Human"\n}}\n\n'
+        f"Topic: {preference}\nAge group: {age_group}"
+    )
 
--------------------------------
+    body = {
+        "prompt": prompt,
+        "max_gen_len": 300,
+        "temperature": 0.9,
+        "top_p": 0.9
+    }
 
-Start the game
+    for _ in range(max_retries):
+        try:
+            response = bedrock.invoke_model(
+                modelId="meta.llama3-8b-instruct-v1:0",
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(body)
+            )
+            response_body = json.loads(response['body'].read())
+            generation = response_body.get("generation", "")
+            parsed = extract_json_from_text(generation)
 
--------------------------------
+            quote = parsed.get("quote", "").strip()
+            source = parsed.get("source", "")
 
-if not st.session_state.game_started: if st.button("Start Game"): with st.spinner("Getting your first quote..."): st.session_state.quotes = load_quotes_batch(age_group, preference) st.session_state.current_index = 0 st.session_state.total = 0 st.session_state.score = 0 st.session_state.answered = False st.session_state.game_started = True
+            if quote and source in ["AI", "Human"] and quote != st.session_state.previous_quote:
+                st.session_state.previous_quote = quote
+                return quote, source
+        except Exception:
+            continue
 
-if not st.session_state.quotes:
-        st.warning("⚠️ No quotes loaded. Try again.")
-        st.session_state.game_started = False
+    return "When circuits dream, wisdom awakens.", "AI"
+
+# -------------------------------
+# Load a new quote if needed
+# -------------------------------
+if st.session_state.load_new_quote:
+    with st.spinner("💡 Generating a mysterious quote..."):
+        quote, source = get_custom_quote(age_group, preference)
+        st.session_state.quote = quote
+        st.session_state.source = source
+        st.session_state.load_new_quote = False
+        st.session_state.answered = False
+
+# -------------------------------
+# Display quote
+# -------------------------------
+if st.session_state.quote:
+    st.markdown(f"### 📝 \"{st.session_state.quote}\"")
+else:
+    st.warning("⚠️ No quote available. Try clicking 'Next Quote' again.")
+    st.stop()
+
+# -------------------------------
+# User guess input
+# -------------------------------
+choice = st.radio("Who said it?", ["AI", "Human"], key=f"guess_{st.session_state.total}")
+
+# -------------------------------
+# Submit answer
+# -------------------------------
+if st.button("Submit Answer") and not st.session_state.answered:
+    st.session_state.total += 1
+    st.session_state.answered = True
+    if choice == st.session_state.source:
+        st.success("✅ Correct!")
+        st.session_state.score += 1
     else:
-        first = st.session_state.quotes[0]
-        st.session_state.current_quote = first["quote"]
-        st.session_state.current_source = first["source"]
-st.stop()
+        st.error(f"❌ Nope! It was actually {st.session_state.source}")
+    st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
 
--------------------------------
-
-Display current quote
-
--------------------------------
-
-st.markdown(f"### 📝 "{st.session_state.current_quote}"")
-
--------------------------------
-
-Input guess
-
--------------------------------
-
-choice = st.radio("Who said it?", ["AI", "Human"], key=f"guess_{st.session_state.current_index}")
-
--------------------------------
-
-Submit guess
-
--------------------------------
-
-if st.button("Submit Answer") and not st.session_state.answered: st.session_state.total += 1 st.session_state.answered = True if choice == st.session_state.current_source: st.success("✅ Correct!") st.session_state.score += 1 else: st.error(f"❌ Nope! It was actually {st.session_state.current_source}") st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
-
--------------------------------
-
-Next quote or End
-
--------------------------------
-
-if st.session_state.answered: if st.session_state.current_index < len(st.session_state.quotes) - 1: if st.button("Next Quote"): st.session_state.current_index += 1 next_q = st.session_state.quotes[st.session_state.current_index] st.session_state.current_quote = next_q["quote"] st.session_state.current_source = next_q["source"] st.session_state.answered = False st.rerun() else: st.markdown("---") st.success("🎉 You've reached the end!") st.markdown(f"### 🏎️ Final Score: {st.session_state.score}/{st.session_state.total}") if st.button("🔄 Play Again"): for key in defaults: st.session_state[key] = defaults[key] st.rerun()
-
+# -------------------------------
+# Next quote
+# -------------------------------
+if st.session_state.answered:
+    if st.button("Next Quote"):
+        st.session_state.load_new_quote = True
+        st.rerun()
