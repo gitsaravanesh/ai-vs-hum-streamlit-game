@@ -27,28 +27,21 @@ bedrock = boto3.client(
 )
 
 # -------------------------------
-# Function to fetch quote from Llama 3
+# Function to fetch quote from Llama 3 (correct prompt structure)
 # -------------------------------
 def get_custom_quote(age_group, preference):
     prompt = (
-        f"Generate one quote for a user aged {age_group} who prefers {preference}. "
-        "Respond strictly in JSON like this:\n"
-        "{\n  \"quote\": \"The quote text\",\n  \"source\": \"AI\" or \"Human\"\n}"
+        f"You are an assistant that only generates short quotes for a game. "
+        f"Generate ONE quote for a user aged {age_group} who prefers {preference}. "
+        f"Respond strictly in JSON like this:\n"
+        f'{{\n  "quote": "The quote text",\n  "source": "AI" or "Human"\n}}'
     )
 
     body = {
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are an assistant that only generates short quotes for a guessing game. Your response must follow JSON structure only."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "max_tokens": 300,
-        "temperature": 0.9
+        "prompt": prompt,
+        "max_gen_len": 300,
+        "temperature": 0.9,
+        "top_p": 0.9
     }
 
     try:
@@ -62,8 +55,8 @@ def get_custom_quote(age_group, preference):
         response_body = json.loads(response['body'].read())
         generation = response_body.get("generation")
 
-        # DEBUG: Uncomment this to see full response during testing
-        # st.write("Bedrock raw response:", generation)
+        # Optional: log the raw output
+        # st.write("Raw LLM output:", generation)
 
         if not generation:
             raise ValueError("Missing 'generation' key in response")
@@ -74,10 +67,10 @@ def get_custom_quote(age_group, preference):
     except Exception as e:
         st.error("⚠️ Failed to get or parse quote from LLM.")
         st.write("🧨 Exception:", str(e))
-        return "Fallback: Curiosity fuels progress.", "AI"
+        return "Fallback: The future belongs to those who dare to guess.", "AI"
 
 # -------------------------------
-# Initialize session state
+# Session state initialization
 # -------------------------------
 if "score" not in st.session_state:
     st.session_state.score = 0
@@ -91,7 +84,7 @@ if "load_new_quote" not in st.session_state:
     st.session_state.load_new_quote = True
 
 # -------------------------------
-# Load a new quote if requested
+# Load a new quote if needed
 # -------------------------------
 if st.session_state.load_new_quote:
     quote, source = get_custom_quote(age_group, preference)
@@ -101,13 +94,13 @@ if st.session_state.load_new_quote:
     st.session_state.answered = False
 
 # -------------------------------
-# Display quote and input
+# Display quote and user input
 # -------------------------------
 st.markdown(f"### 📝 \"{st.session_state.quote}\"")
 choice = st.radio("Who said it?", ["AI", "Human"], key="guess")
 
 # -------------------------------
-# Submit and evaluate
+# Evaluate guess
 # -------------------------------
 if st.button("Submit Answer") and not st.session_state.answered:
     st.session_state.total += 1
@@ -120,7 +113,7 @@ if st.button("Submit Answer") and not st.session_state.answered:
     st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
 
 # -------------------------------
-# Load next quote
+# Next quote button
 # -------------------------------
 if st.session_state.answered:
     if st.button("Next Quote"):
