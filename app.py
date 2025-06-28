@@ -1,4 +1,7 @@
-import streamlit as st import boto3 import json import re
+import streamlit as st 
+import boto3 
+import json 
+import re
 
 -------------------------------
 
@@ -14,7 +17,9 @@ Session state setup
 
 -------------------------------
 
-defaults = { "game_started": False, "score": 0, "total": 0, "quotes": [], "current_index": 0, "answered": False, "current_quote": "", "current_source": "" } for key, val in defaults.items(): if key not in st.session_state: st.session_state[key] = val
+defaults = { "game_started": False, "score": 0, "total": 0, "quotes": [], "current_index": 0, "answered": False, "current_quote": "", "current_source": "" }
+
+for key, val in defaults.items(): if key not in st.session_state: st.session_state[key] = val
 
 -------------------------------
 
@@ -143,5 +148,13 @@ Submit guess
 
 -------------------------------
 
-if st.button("Submit Answer") and not st.session
+if st.button("Submit Answer") and not st.session_state.answered: st.session_state.total += 1 st.session_state.answered = True if choice == st.session_state.current_source: st.success("✅ Correct!") st.session_state.score += 1 else: st.error(f"❌ Nope! It was actually {st.session_state.current_source}") st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
+
+-------------------------------
+
+Next quote or End
+
+-------------------------------
+
+if st.session_state.answered: if st.session_state.current_index < len(st.session_state.quotes) - 1: if st.button("Next Quote"): st.session_state.current_index += 1 next_q = st.session_state.quotes[st.session_state.current_index] st.session_state.current_quote = next_q["quote"] st.session_state.current_source = next_q["source"] st.session_state.answered = False st.rerun() else: st.markdown("---") st.success("🎉 You've reached the end!") st.markdown(f"### 🏎️ Final Score: {st.session_state.score}/{st.session_state.total}") if st.button("🔄 Play Again"): for key in defaults: st.session_state[key] = defaults[key] st.rerun()
 
