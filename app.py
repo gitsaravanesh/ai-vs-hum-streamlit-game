@@ -143,4 +143,4 @@ if st.button("Submit Answer") and not st.session_state.answered:
 if st.session_state.answered:
     if st.button("Next Quote"):
         st.session_state.load_new_quote = True
-        st.rerun()
+        st.rerun()pm M ù
