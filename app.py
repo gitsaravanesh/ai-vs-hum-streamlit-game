@@ -28,6 +28,8 @@ if "answered" not in st.session_state:
     st.session_state.answered = False
 if "load_new_quote" not in st.session_state:
     st.session_state.load_new_quote = False
+if "previous_quote" not in st.session_state:
+    st.session_state.previous_quote = ""
 
 # -------------------------------
 # User input for personalization
@@ -55,7 +57,7 @@ bedrock = boto3.client(
 )
 
 # -------------------------------
-# Extract JSON from messy LLM output
+# Extract JSON from LLM output
 # -------------------------------
 def extract_json_from_text(text):
     try:
@@ -63,15 +65,14 @@ def extract_json_from_text(text):
         parsed = json.loads(json_str)
         if "quote" in parsed and "source" in parsed:
             return parsed
-        else:
-            raise ValueError("JSON missing required keys.")
     except Exception:
-        return {"quote": "", "source": ""}
+        pass
+    return {"quote": "", "source": ""}
 
 # -------------------------------
-# Function to get quote from Llama 3 with retries
+# Get quote from Bedrock with retries and uniqueness check
 # -------------------------------
-def get_custom_quote(age_group, preference, max_retries=3):
+def get_custom_quote(age_group, preference, max_retries=5):
     prompt = (
         f"You are an assistant that generates short quotes for a guessing game. "
         f"Randomly choose to either write your own quote as an AI, "
@@ -100,17 +101,19 @@ def get_custom_quote(age_group, preference, max_retries=3):
             generation = response_body.get("generation", "")
             parsed = extract_json_from_text(generation)
 
-            if parsed["quote"].strip() and parsed["source"] in ["AI", "Human"]:
-                return parsed["quote"], parsed["source"]
+            quote = parsed.get("quote", "").strip()
+            source = parsed.get("source", "")
 
+            if quote and source in ["AI", "Human"] and quote != st.session_state.previous_quote:
+                st.session_state.previous_quote = quote
+                return quote, source
         except Exception:
             continue
 
-    # Fallback after all retries fail
-    return "The future belongs to those who reboot wisely.", "AI"
+    return "When circuits dream, wisdom awakens.", "AI"
 
 # -------------------------------
-# Load a new quote if flagged
+# Load a new quote if needed
 # -------------------------------
 if st.session_state.load_new_quote:
     with st.spinner("💡 Generating a mysterious quote..."):
@@ -121,7 +124,7 @@ if st.session_state.load_new_quote:
         st.session_state.answered = False
 
 # -------------------------------
-# Show the quote (only if valid)
+# Display quote
 # -------------------------------
 if st.session_state.quote:
     st.markdown(f"### 📝 \"{st.session_state.quote}\"")
