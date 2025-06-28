@@ -12,13 +12,39 @@ st.title("🧠 Who Said It: AI or Human?")
 st.subheader("Pick your style and guess whether the quote is written by AI or a Human!")
 
 # -------------------------------
+# Initialize session state
+# -------------------------------
+if "game_started" not in st.session_state:
+    st.session_state.game_started = False
+if "score" not in st.session_state:
+    st.session_state.score = 0
+if "total" not in st.session_state:
+    st.session_state.total = 0
+if "quote" not in st.session_state:
+    st.session_state.quote = ""
+    st.session_state.source = ""
+if "answered" not in st.session_state:
+    st.session_state.answered = False
+if "load_new_quote" not in st.session_state:
+    st.session_state.load_new_quote = False
+
+# -------------------------------
 # User input for personalization
 # -------------------------------
 age_group = st.selectbox("Select your age group", ["Under 18", "18-25", "26-40", "41-60", "60+"])
 preference = st.selectbox("Pick your quote preference", ["Technology", "Motivational", "Humor", "Philosophy", "Life Advice"])
 
 # -------------------------------
-# Initialize Bedrock client using secrets
+# Start game button
+# -------------------------------
+if not st.session_state.game_started:
+    if st.button("Start Game"):
+        st.session_state.game_started = True
+        st.session_state.load_new_quote = True
+    st.stop()
+
+# -------------------------------
+# Initialize Bedrock client
 # -------------------------------
 bedrock = boto3.client(
     service_name="bedrock-runtime",
@@ -41,14 +67,16 @@ def extract_json_from_text(text):
         return {"quote": "The mind dreams. The machine delivers.", "source": "AI"}
 
 # -------------------------------
-# Function to fetch quote from Llama 3
+# Function to get quote from Llama 3
 # -------------------------------
 def get_custom_quote(age_group, preference):
     prompt = (
-        f"You are an assistant that only generates short quotes for a game. "
-        f"Generate ONE quote for a user aged {age_group} who prefers {preference}. "
-        f"Respond strictly in JSON like this:\n"
-        f'{{\n  "quote": "The quote text",\n  "source": "AI" or "Human"\n}}'
+        f"You are an assistant that generates short quotes for a game. "
+        f"Randomly choose to either write your own quote as an AI, "
+        f"or pick a real quote from a known human source. Do not say who said it. "
+        f"Only respond in this JSON format:\n"
+        f'{{\n  "quote": "The quote text",\n  "source": "AI" or "Human"\n}}\n\n'
+        f"Topic: {preference}\nAge group: {age_group}"
     )
 
     body = {
@@ -81,20 +109,6 @@ def get_custom_quote(age_group, preference):
         return "Fallback: The future belongs to those who dare to guess.", "AI"
 
 # -------------------------------
-# Session state initialization
-# -------------------------------
-if "score" not in st.session_state:
-    st.session_state.score = 0
-    st.session_state.total = 0
-if "quote" not in st.session_state:
-    st.session_state.quote = ""
-    st.session_state.source = ""
-if "answered" not in st.session_state:
-    st.session_state.answered = False
-if "load_new_quote" not in st.session_state:
-    st.session_state.load_new_quote = True
-
-# -------------------------------
 # Load a new quote if needed
 # -------------------------------
 if st.session_state.load_new_quote:
@@ -105,7 +119,7 @@ if st.session_state.load_new_quote:
     st.session_state.answered = False
 
 # -------------------------------
-# Display quote and user input
+# Display quote and input
 # -------------------------------
 st.markdown(f"### 📝 \"{st.session_state.quote}\"")
 choice = st.radio("Who said it?", ["AI", "Human"], key=f"guess_{st.session_state.total}")
@@ -124,7 +138,7 @@ if st.button("Submit Answer") and not st.session_state.answered:
     st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
 
 # -------------------------------
-# Always show "Next Quote" after answering
+# Next quote
 # -------------------------------
 if st.session_state.answered:
     if st.button("Next Quote"):
