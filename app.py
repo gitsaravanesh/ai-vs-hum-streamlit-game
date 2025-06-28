@@ -27,7 +27,7 @@ bedrock = boto3.client(
 )
 
 # -------------------------------
-# Function to fetch quote from Llama 3 with DEBUGGING
+# Function to fetch quote from Llama 3
 # -------------------------------
 def get_custom_quote(age_group, preference):
     prompt = (
@@ -52,9 +52,6 @@ def get_custom_quote(age_group, preference):
     }
 
     try:
-        # DEBUG: Show the payload sent to Bedrock
-        st.write("🛠️ JSON sent to Bedrock:", body)
-
         response = bedrock.invoke_model(
             modelId="meta.llama3-8b-instruct-v1:0",
             contentType="application/json",
@@ -63,9 +60,11 @@ def get_custom_quote(age_group, preference):
         )
 
         response_body = json.loads(response['body'].read())
-        st.write("📩 Raw Bedrock response body:", response_body)
-
         generation = response_body.get("generation")
+
+        # DEBUG: Uncomment this to see full response during testing
+        # st.write("Bedrock raw response:", generation)
+
         if not generation:
             raise ValueError("Missing 'generation' key in response")
 
@@ -78,19 +77,31 @@ def get_custom_quote(age_group, preference):
         return "Fallback: Curiosity fuels progress.", "AI"
 
 # -------------------------------
-# Streamlit session state setup
+# Initialize session state
 # -------------------------------
 if "score" not in st.session_state:
     st.session_state.score = 0
     st.session_state.total = 0
 if "quote" not in st.session_state:
+    st.session_state.quote = ""
+    st.session_state.source = ""
+if "answered" not in st.session_state:
+    st.session_state.answered = False
+if "load_new_quote" not in st.session_state:
+    st.session_state.load_new_quote = True
+
+# -------------------------------
+# Load a new quote if requested
+# -------------------------------
+if st.session_state.load_new_quote:
     quote, source = get_custom_quote(age_group, preference)
     st.session_state.quote = quote
     st.session_state.source = source
+    st.session_state.load_new_quote = False
     st.session_state.answered = False
 
 # -------------------------------
-# Display quote and get user guess
+# Display quote and input
 # -------------------------------
 st.markdown(f"### 📝 \"{st.session_state.quote}\"")
 choice = st.radio("Who said it?", ["AI", "Human"], key="guess")
@@ -109,12 +120,9 @@ if st.button("Submit Answer") and not st.session_state.answered:
     st.markdown(f"### 🎯 Score: {st.session_state.score}/{st.session_state.total}")
 
 # -------------------------------
-# Next quote
+# Load next quote
 # -------------------------------
 if st.session_state.answered:
     if st.button("Next Quote"):
-        quote, source = get_custom_quote(age_group, preference)
-        st.session_state.quote = quote
-        st.session_state.source = source
-        st.session_state.answered = False
+        st.session_state.load_new_quote = True
         st.rerun()
