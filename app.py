@@ -6,9 +6,9 @@ import re
 # -------------------------------
 # Page configuration
 # -------------------------------
-st.set_page_config(page_title="Who Said It: AI or Human?", page_icon="🧠")
-st.title("🧠 Who Said It: AI or Human?")
-st.subheader("Pick your style and guess whether the quote is written by AI or a Human!")
+st.set_page_config(page_title="Who Said What: AI or Human?", page_icon="🧠")
+st.title("🧠 Who Said What: AI or Human?")
+st.subheader("Pick your mood and guess whether the quote is written by AI or a Human!")
 
 # -------------------------------
 # Initialize session state
